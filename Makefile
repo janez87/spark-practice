@@ -84,8 +84,7 @@ SERVICE ?= jupyterlab
 ##@ Build (maintainers)
 
 .PHONY: build
-build: ## Build every image locally (uses compose.dev.yml).
-	$(DOCKER_COMPOSE) $(COMPOSE_DEV) build
+build: build-spark-master build-spark-worker build-jupyterlab ## Build every image locally, in dependency order.
 
 .PHONY: build-base build-spark-base build-spark-master build-spark-worker build-jupyterlab
 build-base: ## Build the shared base image.
