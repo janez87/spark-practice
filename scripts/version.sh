@@ -31,6 +31,6 @@ export BUILD_DATE="${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}"
 export CONFLUENT_TAG="${CONFLUENT_TAG:-7.5.3}"
 
 # When sourced (not executed) we silently export. When executed, print.
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then
     env | grep -E '^(REGISTRY|SPARK_|HADOOP_|SCALA_|ALMOND_|JUPYTERLAB_|IMAGE_|BASE_|BUILD_DATE|CONFLUENT_)' | sort
 fi
