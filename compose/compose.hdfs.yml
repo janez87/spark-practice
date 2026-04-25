@@ -1,0 +1,49 @@
+name: spark-practice
+
+services:
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode
+    hostname: namenode
+    profiles: ["hdfs"]
+    restart: unless-stopped
+    ports:
+      - "${HDFS_NAMENODE_UI_PORT:-9870}:9870"
+      - "${HDFS_NAMENODE_RPC_PORT:-9010}:9000"
+    environment:
+      CLUSTER_NAME: spark-practice
+      CORE_CONF_fs_defaultFS: hdfs://namenode:9000
+    env_file:
+      - ../config/hadoop.env
+    volumes:
+      - hadoop_namenode:/hadoop/dfs/name
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9870/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode
+    profiles: ["hdfs"]
+    restart: unless-stopped
+    depends_on:
+      namenode:
+        condition: service_healthy
+    ports:
+      - "${HDFS_DATANODE_UI_PORT:-9864}:9864"
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870"
+      CORE_CONF_fs_defaultFS: hdfs://namenode:9000
+    env_file:
+      - ../config/hadoop.env
+    volumes:
+      - hadoop_datanode:/hadoop/dfs/data
+
+volumes:
+  hadoop_namenode:
+    name: spark-practice-hadoop-namenode
+  hadoop_datanode:
+    name: spark-practice-hadoop-datanode

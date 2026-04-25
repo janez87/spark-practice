@@ -1,0 +1,71 @@
+name: spark-practice
+
+x-spark-common: &spark-common
+  restart: unless-stopped
+  environment:
+    SPARK_MASTER_HOST: spark-master
+    SPARK_MASTER_PORT: 7077
+    SPARK_DRIVER_MEMORY: ${SPARK_DRIVER_MEMORY:-1G}
+    SPARK_EXECUTOR_MEMORY: ${SPARK_EXECUTOR_MEMORY:-1G}
+
+services:
+  spark-master:
+    <<: *spark-common
+    image: ${REGISTRY:-janez87}/spark-practice-spark-master:${SPARK_TAG:-3.5.1}
+    hostname: spark-master
+    ports:
+      - "${SPARK_MASTER_UI_PORT:-8080}:8080"
+      - "7077:7077"
+    volumes:
+      - spark-events:/opt/spark/work
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+
+  spark-worker:
+    <<: *spark-common
+    image: ${REGISTRY:-janez87}/spark-practice-spark-worker:${SPARK_TAG:-3.5.1}
+    environment:
+      SPARK_MASTER_HOST: spark-master
+      SPARK_MASTER_PORT: 7077
+      SPARK_WORKER_CORES: ${SPARK_WORKER_CORES:-2}
+      SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY:-2G}
+      SPARK_DRIVER_MEMORY: ${SPARK_DRIVER_MEMORY:-1G}
+      SPARK_EXECUTOR_MEMORY: ${SPARK_EXECUTOR_MEMORY:-1G}
+    depends_on:
+      spark-master:
+        condition: service_healthy
+    deploy:
+      replicas: ${WORKERS:-2}
+    volumes:
+      - spark-events:/opt/spark/work
+
+  jupyterlab:
+    image: ${REGISTRY:-janez87}/spark-practice-jupyterlab:${JUPYTERLAB_TAG:-4.1.5-spark-3.5.1}
+    container_name: jupyterlab
+    restart: unless-stopped
+    environment:
+      JUPYTER_TOKEN: ${JUPYTER_TOKEN:-}
+      SPARK_MASTER: spark://spark-master:7077
+    ports:
+      - "${JUPYTER_PORT:-8888}:8888"
+      - "4040:4040"
+    volumes:
+      - ../notebooks:/opt/workspace
+      - ../notebooks/data:/opt/workspace/data
+    depends_on:
+      spark-master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8888/api || exit 1"]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+
+volumes:
+  spark-events:
+    name: spark-practice-events
