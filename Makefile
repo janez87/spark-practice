@@ -12,8 +12,17 @@ COMPOSE_DIR    := $(REPO_ROOT)/compose
 COMPOSE_CORE   := -f $(COMPOSE_DIR)/docker-compose.yml
 COMPOSE_KAFKA  := $(COMPOSE_CORE) -f $(COMPOSE_DIR)/compose.kafka.yml
 COMPOSE_HDFS   := $(COMPOSE_CORE) -f $(COMPOSE_DIR)/compose.hdfs.yml
+COMPOSE_ALL    := $(COMPOSE_CORE) -f $(COMPOSE_DIR)/compose.kafka.yml -f $(COMPOSE_DIR)/compose.hdfs.yml
 COMPOSE_DEV    := $(COMPOSE_CORE) -f $(COMPOSE_DIR)/compose.dev.yml
 ENV_FILE       := $(REPO_ROOT)/.env
+
+# PROFILES is a comma-separated list of compose profiles (e.g. "kafka,hdfs").
+# It expands into "--profile kafka --profile hdfs" for the compose command.
+comma          := ,
+empty          :=
+space          := $(empty) $(empty)
+PROFILES       ?=
+PROFILE_FLAGS  := $(foreach p,$(subst $(comma),$(space),$(PROFILES)),--profile $(p))
 
 # Pull versions from scripts/version.sh so this file isn't a second source of truth.
 include $(REPO_ROOT)/.make/version.mk
@@ -53,26 +62,37 @@ pull: ## docker pull every published image (no build).
 	$(DOCKER_COMPOSE) $(COMPOSE_CORE) pull
 
 .PHONY: up
-up: ## Start the core stack (jupyterlab + spark master + workers).
-	$(DOCKER_COMPOSE) $(COMPOSE_CORE) up -d
+up: ## Start the core stack. Add overlays with PROFILES=kafka or PROFILES=kafka,hdfs.
+	$(DOCKER_COMPOSE) $(COMPOSE_ALL) $(PROFILE_FLAGS) up -d
 	@echo "JupyterLab → http://localhost:$${JUPYTER_PORT:-8888}"
 	@echo "Spark UI   → http://localhost:$${SPARK_MASTER_UI_PORT:-8080}"
+	@if [[ ",$(PROFILES)," == *,kafka,* ]]; then \
+	    echo "Kafka      → localhost:$${KAFKA_PORT:-9092} (in-cluster: kafka:29092)"; \
+	    echo "Schema reg → http://localhost:$${SCHEMA_REGISTRY_PORT:-8084}"; \
+	fi
+	@if [[ ",$(PROFILES)," == *,hdfs,* ]]; then \
+	    echo "HDFS UI    → http://localhost:$${HDFS_NAMENODE_UI_PORT:-9870}"; \
+	fi
 
 .PHONY: up-kafka
-up-kafka: ## Start the core stack + kafka profile.
-	$(DOCKER_COMPOSE) $(COMPOSE_KAFKA) --profile kafka up -d
+up-kafka: ## Shortcut for: make up PROFILES=kafka
+	@$(MAKE) up PROFILES=kafka
 
 .PHONY: up-hdfs
-up-hdfs: ## Start the core stack + hdfs profile.
-	$(DOCKER_COMPOSE) $(COMPOSE_HDFS) --profile hdfs up -d
+up-hdfs: ## Shortcut for: make up PROFILES=hdfs
+	@$(MAKE) up PROFILES=hdfs
+
+.PHONY: up-all
+up-all: ## Shortcut for: make up PROFILES=kafka,hdfs
+	@$(MAKE) up PROFILES=kafka,hdfs
 
 .PHONY: down
 down: ## Stop and remove containers (volumes preserved).
-	$(DOCKER_COMPOSE) $(COMPOSE_KAFKA) -f $(COMPOSE_DIR)/compose.hdfs.yml --profile kafka --profile hdfs down
+	$(DOCKER_COMPOSE) $(COMPOSE_ALL) --profile kafka --profile hdfs down
 
 .PHONY: clean
 clean: ## down + remove volumes + prune dangling images.
-	$(DOCKER_COMPOSE) $(COMPOSE_KAFKA) -f $(COMPOSE_DIR)/compose.hdfs.yml --profile kafka --profile hdfs down -v
+	$(DOCKER_COMPOSE) $(COMPOSE_ALL) --profile kafka --profile hdfs down -v
 	docker image prune -f
 
 .PHONY: logs

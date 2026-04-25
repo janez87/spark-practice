@@ -6,9 +6,9 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${REPO_ROOT}/compose"
 
-# With the core compose file only, "kafka" isn't a defined service and the
-# command errors out. Treat any failure (or empty output) as "skip".
-kafka_id="$(docker compose ps -q kafka 2>/dev/null | head -n1 || true)"
+# Query by container name directly so the test works regardless of which
+# compose overlay files are loaded. Kafka is named "kafka" in compose.kafka.yml.
+kafka_id="$(docker ps --filter 'name=^kafka$' --filter 'status=running' -q | head -n1)"
 if [[ -z "${kafka_id}" ]]; then
     echo "kafka container not running — skipping kafka overlay smoke test"
     exit 0
