@@ -20,12 +20,16 @@ ENV SPARK_HOME=${SPARK_HOME} \
     PYSPARK_DRIVER_PYTHON=python3 \
     PATH=${SPARK_HOME}/bin:${SPARK_HOME}/sbin:${PATH}
 
+ARG GRAPHFRAMES_JAR=graphframes-0.8.4-spark3.5-s_2.12.jar
+
 RUN set -eux; \
     curl -fsSL "https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz" -o /tmp/spark.tgz; \
     mkdir -p "${SPARK_HOME}"; \
     tar -xzf /tmp/spark.tgz -C "${SPARK_HOME}" --strip-components=1; \
     rm -f /tmp/spark.tgz; \
-    mkdir -p "${SPARK_HOME}/logs" "${SPARK_HOME}/work"
+    mkdir -p "${SPARK_HOME}/logs" "${SPARK_HOME}/work"; \
+    curl -fsSL "https://repos.spark-packages.org/graphframes/graphframes/0.8.4-spark3.5-s_2.12/${GRAPHFRAMES_JAR}" \
+        -o "${SPARK_HOME}/jars/${GRAPHFRAMES_JAR}"
 
 COPY requirements.txt /tmp/requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \

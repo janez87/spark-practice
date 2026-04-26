@@ -28,6 +28,11 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip3 install --no-cache-dir -r /tmp/requirements.txt && \
     rm -f /tmp/requirements.txt
 
+# Bake the graphframes JAR into pyspark's jars dir so the driver has it on its classpath.
+RUN PYSPARK_JARS="$(python3 -c 'import pyspark, os; print(os.path.join(os.path.dirname(pyspark.__file__), "jars"))')" && \
+    curl -fsSL "https://repos.spark-packages.org/graphframes/graphframes/0.8.4-spark3.5-s_2.12/graphframes-0.8.4-spark3.5-s_2.12.jar" \
+        -o "${PYSPARK_JARS}/graphframes-0.8.4-spark3.5-s_2.12.jar"
+
 # Scala kernel (almond)
 COPY kernels/install-scala.sh /tmp/install-scala.sh
 RUN chmod +x /tmp/install-scala.sh && /tmp/install-scala.sh && rm -f /tmp/install-scala.sh
