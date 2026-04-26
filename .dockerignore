@@ -1,0 +1,35 @@
+# Keep the build context tiny: it is sent to the daemon for every build.
+.git
+.github
+.idea
+.vscode
+*.iml
+**/.DS_Store
+**/.ipynb_checkpoints
+**/__pycache__
+*.pyc
+
+# Repo-level extras that don't belong in any image
+PLAN.md
+CHANGES.md
+CHANGELOG.md
+README.md
+LICENSE
+CONTRIBUTING.md
+docs
+pdfs
+notebooks/data
+data.zip
+
+# Compose / dotfiles
+compose
+.env
+.env.example
+.editorconfig
+.dockerignore
+.gitignore
+.gitattributes
+Makefile
+.make
+scripts
+tests

@@ -1,0 +1,36 @@
+name: spark-practice
+
+# Maintainer overlay: replaces `image:` with local `build:` blocks so
+# `make build` (or `docker compose -f docker-compose.yml -f compose.dev.yml build`)
+# produces images locally instead of pulling from Docker Hub.
+
+services:
+  spark-master:
+    image: ${REGISTRY:-janez87}/spark-practice-spark-master:${SPARK_TAG:-3.5.1}
+    build:
+      context: ../images/spark-master
+      args:
+        REGISTRY: ${REGISTRY:-janez87}
+        SPARK_BASE_TAG: ${SPARK_TAG:-3.5.1}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
+
+  spark-worker:
+    image: ${REGISTRY:-janez87}/spark-practice-spark-worker:${SPARK_TAG:-3.5.1}
+    build:
+      context: ../images/spark-worker
+      args:
+        REGISTRY: ${REGISTRY:-janez87}
+        SPARK_BASE_TAG: ${SPARK_TAG:-3.5.1}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
+
+  jupyterlab:
+    image: ${REGISTRY:-janez87}/spark-practice-jupyterlab:${JUPYTERLAB_TAG:-4.1.5-spark-3.5.1}
+    build:
+      context: ../images/jupyterlab
+      args:
+        REGISTRY: ${REGISTRY:-janez87}
+        BASE_TAG: ${BASE_TAG:-latest}
+        SPARK_VERSION: ${SPARK_VERSION:-3.5.1}
+        SCALA_VERSION: ${SCALA_VERSION:-2.12.18}
+        ALMOND_VERSION: ${ALMOND_VERSION:-0.14.0-RC15}
+        BUILD_DATE: ${BUILD_DATE:-unknown}

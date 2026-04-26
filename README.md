@@ -1,152 +1,98 @@
-# Apache Spark Practice 
+# Apache Spark Practice
 
-This repository is based on the [Standalone Cluster on Docker](https://github.com/cluster-apps-on-docker/spark-standalone-cluster-on-docker) and the Material Developed by the Data System Group from Tartu University.
+A self-contained Apache Spark + JupyterLab lab stack, packaged as multi-arch Docker images for student use. Optional overlays add a Kafka broker (Spark Structured Streaming labs) and an HDFS cluster.
 
-> The project was featured on an **[article](https://www.mongodb.com/blog/post/getting-started-with-mongodb-pyspark-and-jupyter-notebook)** at **MongoDB** official tech blog! :scream:
+Originally based on [Standalone Cluster on Docker](https://github.com/cluster-apps-on-docker/spark-standalone-cluster-on-docker); rewritten for multi-arch publishing and a profile-driven Compose layout.
 
-> The project just got its own **[article](https://towardsdatascience.com/apache-spark-cluster-on-docker-ft-a-juyterlab-interface-418383c95445)** at **Towards Data Science** Medium blog! :sparkles:
+![cluster architecture](docs/images/cluster-architecture.png)
 
-## Introduction
+## What you get
 
-This project gives you an **Apache Spark** cluster in standalone mode with a **JupyterLab** interface built on top of **Docker**.
-It also includes an second version which mounts an HDFS cluster and allows testing parallel data processing.
+| Service       | URL                                       | Purpose                                  |
+|---------------|-------------------------------------------|------------------------------------------|
+| JupyterLab    | http://localhost:8888                     | Notebooks, PySpark + Scala kernels       |
+| Spark driver  | http://localhost:4040                     | Per-application UI                       |
+| Spark master  | http://localhost:8080                     | Cluster overview                         |
+| Spark workers | http://localhost:8081… (per replica)      | Worker UIs                               |
 
-Learn Apache Spark through its **Scala**, **Python** (PySpark) and **R** (SparkR) API by running the Jupyter [notebooks](build/workspace/) with examples on how to read, process and write data.
+Optional overlays:
 
-<p align="center"><img src="docs/image/cluster-architecture.png"></p>
+| Profile  | Adds                                                                           |
+|----------|--------------------------------------------------------------------------------|
+| `kafka`  | ZooKeeper, Kafka broker, Schema Registry — for Structured Streaming labs       |
+| `hdfs`   | HDFS NameNode + DataNode — for distributed-storage labs                        |
 
-![build-master](https://github.com/cluster-apps-on-docker/spark-standalone-cluster-on-docker/workflows/build-master/badge.svg)
-![sponsor](https://img.shields.io/badge/patreon-sponsor-ff69b4)
-![jupyterlab-latest-version](https://img.shields.io/docker/v/andreper/jupyterlab/3.0.0-spark-3.0.0?color=yellow&label=jupyterlab-latest)
-![spark-latest-version](https://img.shields.io/docker/v/andreper/spark-master/3.0.0?color=yellow&label=spark-latest)
-![spark-scala-api](https://img.shields.io/badge/spark%20api-scala-red)
-![spark-pyspark-api](https://img.shields.io/badge/spark%20api-pyspark-red)
-![spark-sparkr-api](https://img.shields.io/badge/spark%20api-sparkr-red)
+## Quick start (students)
 
-## TL;DR
-
-```bash
-curl -LO https://raw.githubusercontent.com/cluster-apps-on-docker/spark-standalone-cluster-on-docker/master/docker-compose.yml
-docker-compose up
-```
-
-## Contents
-
-- [Quick Start](#quick-start)
-- [Tech Stack](#tech-stack)
-- [Metrics](#metrics)
-- [Contributing](#contributing)
-- [Contributors](#contributors)
-- [Support](#support)
-
-## <a name="quick-start"></a>Quick Start
-
-### Cluster overview
-
-| Application     | URL                                      | Description                                                |
-| --------------- | ---------------------------------------- | ---------------------------------------------------------- |
-| JupyterLab      | [localhost:8888](http://localhost:8888/) | Cluster interface with built-in Jupyter notebooks          |
-| Spark Driver    | [localhost:4040](http://localhost:4040/) | Spark Driver web ui                                        |
-| Spark Master    | [localhost:8080](http://localhost:8080/) | Spark Master node                                          |
-| Spark Worker I  | [localhost:8081](http://localhost:8081/) | Spark Worker node with 1 core and 512m of memory (default) |
-| Spark Worker II | [localhost:8082](http://localhost:8082/) | Spark Worker node with 1 core and 512m of memory (default) |
-
-### Prerequisites
-
- - Install [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/), check **infra** [supported versions](#tech-stack)
-
-### Download from Docker Hub (easier)
-
-1. Download the [docker compose](docker-compose.yml) file;
+You only need Docker (with Compose v2) and `make`. No local build.
 
 ```bash
-curl -LO https://raw.githubusercontent.com/cluster-apps-on-docker/spark-standalone-cluster-on-docker/master/docker-compose.yml
+git clone https://github.com/janez87/spark-practice.git
+cd spark-practice
+make init        # one-time: creates .env from .env.example
+make up          # docker pull + start the cluster
 ```
 
-2. Edit the [docker compose](docker-compose.yml) file with your favorite tech stack version, check **apps** [supported versions](#tech-stack);
-3. Start the cluster;
+Open http://localhost:8888 — the notebooks under `notebooks/` are bind-mounted into the container, so your edits persist on your host machine.
+
+To stop:
+```bash
+make down
+```
+
+For overlays:
+```bash
+make up-kafka    # core + kafka stack
+make up-hdfs     # core + hdfs stack
+```
+
+See [`docs/quickstart.md`](docs/quickstart.md) for the full student walkthrough, [`docs/troubleshooting.md`](docs/troubleshooting.md) for common issues.
+
+## Building from source (maintainers)
 
 ```bash
-docker-compose up
+make build       # builds all images locally for your host architecture
+make smoke       # runs tests/smoke/*.sh against the running stack
 ```
 
-4. Run Apache Spark code using the provided Jupyter [notebooks](build/workspace/) with Scala, PySpark and SparkR examples;
-5. Stop the cluster by typing `ctrl+c` on the terminal;
-6. Run step 3 to restart the cluster.
-
-### Build from your local machine
-
-> **Note**: Local build is currently only supported on Linux OS distributions.
-
-1. Download the source code or clone the repository;
-2. Move to the build directory;
+Multi-arch publishing happens in CI on tag push. To dry-run locally:
 
 ```bash
-cd build
+make buildx-init
+make push PUSH_TAG=3.5.1-rc1   # builds + pushes amd64 and arm64
 ```
 
-3. Edit the [build.yml](build/build.yml) file with your favorite tech stack version;
-4. Match those version on the [docker compose](build/docker-compose.yml) file;
-5. Build up the images;
+See [`docs/build-from-source.md`](docs/build-from-source.md) for details.
 
-```bash
-chmod +x build.sh ; ./build.sh
-```
+## Versions
 
-6. Start the cluster;
+| Component   | Version |
+|-------------|---------|
+| Spark       | 3.5.1   |
+| Hadoop      | 3       |
+| JupyterLab  | 4.1.5   |
+| Scala       | 2.12.18 |
+| Java        | 17 (Temurin) |
+| Python      | 3 (system) |
 
-```bash
-docker-compose up
-```
+Versions live in `scripts/version.sh` (and mirrored into `.make/version.mk` for the Makefile). Edit one place; everything else picks it up.
 
-7. Run Apache Spark code using the provided Jupyter [notebooks](build/workspace/) with Scala, PySpark and SparkR examples;
-8. Stop the cluster by typing `ctrl+c` on the terminal;
-9. Run step 6 to restart the cluster.
+## Repository layout
 
-## <a name="tech-stack"></a>Tech Stack
+See [`PLAN.md`](PLAN.md) for the full layout and the rationale behind each move. Top-level summary:
 
-- Infra
+- `compose/` — one core file + three overlays (kafka / hdfs / dev).
+- `images/` — one Dockerfile per published image.
+- `notebooks/` — practice sessions PS00–PS03, bind-mounted into JupyterLab.
+- `config/` — `hadoop.env`, `spark-defaults.conf`.
+- `scripts/` — `version.sh`, `fetch-data.sh`, `smoke-test.sh`.
+- `tests/smoke/` — one bash check per service.
+- `.github/workflows/` — CI + multi-arch publish + release.
 
-| Component      | Version |
-| -------------- | ------- |
-| Docker Engine  | 1.13.0+ |
-| Docker Compose | 1.10.0+ |
+## Contributing
 
-- Languages and Kernels
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for how to propose changes and the tag → release flow. The full breaking-change record between this version and the previous lab stack lives in [`docs/upgrading.md`](docs/upgrading.md).
 
-| Spark | Hadoop | Scala   | [Scala Kernel](https://almond.sh/) | Python | [Python Kernel](https://ipython.org/) | R     | [R Kernel](https://irkernel.github.io/) |
-| ----- | ------ | ------- | ---------------------------------- | ------ | ------------------------------------- | ----- | --------------------------------------- |
-| 3.x   | 3.2    | 2.12.10 | 0.10.9                             | 3.7.3  | 7.19.0                                 | 3.5.2 | 1.1.1                                   |
-| 2.x   | 2.7    | 2.11.12 | 0.6.0                              | 3.7.3  | 7.19.0                                 | 3.5.2 | 1.1.1                                   |
+## License
 
-- Apps
-
-| Component      | Version                 | Docker Tag                                           |
-| -------------- | ----------------------- | ---------------------------------------------------- |
-| Apache Spark   | 2.4.0 \| 2.4.4 \| 3.0.0 | **\<spark-version>**                                 |
-| JupyterLab     | 2.1.4 \| 3.0.0          | **\<jupyterlab-version>**-spark-**\<spark-version>** |
-
-## <a name="metrics"></a>Metrics
-
-| Image                                                          | Size                                                                                           | Downloads                                                                 |
-| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| [JupyterLab](https://hub.docker.com/r/andreper/jupyterlab)     | ![docker-size-jupyterlab](https://img.shields.io/docker/image-size/andreper/jupyterlab/latest) | ![docker-pull](https://img.shields.io/docker/pulls/andreper/jupyterlab)   |
-| [Spark Master](https://hub.docker.com/r/andreper/spark-master) | ![docker-size-master](https://img.shields.io/docker/image-size/andreper/spark-master/latest)   | ![docker-pull](https://img.shields.io/docker/pulls/andreper/spark-master) |
-| [Spark Worker](https://hub.docker.com/r/andreper/spark-worker) | ![docker-size-worker](https://img.shields.io/docker/image-size/andreper/spark-worker/latest)   | ![docker-pull](https://img.shields.io/docker/pulls/andreper/spark-worker) |
-
-## <a name="contributing"></a>Contributing
-
-We'd love some help. To contribute, please read [this file](CONTRIBUTING.md).
-
-## <a name="contributors"></a>Contributors
-
-A list of amazing people that somehow contributed to the project can be found in [this file](CONTRIBUTORS.md). This 
-project is maintained by:
-
-> **André Perez** - [dekoperez](https://twitter.com/dekoperez) - andre.marcos.perez@gmail.com
-
-## <a name="support"></a>Support
-
-> Support us on GitHub by staring this project :star:
-
-> Support us on [Patreon](https://www.patreon.com/andreperez). :sparkling_heart:
+MIT — see [`LICENSE`](LICENSE).
