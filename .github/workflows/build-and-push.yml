@@ -16,27 +16,11 @@ env:
   PLATFORMS: linux/amd64,linux/arm64
 
 jobs:
-  publish:
+  resolve-tag:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - image: base
-            context: images/base
-          - image: spark-base
-            context: images/spark-base
-          - image: spark-master
-            context: images/spark-master
-          - image: spark-worker
-            context: images/spark-worker
-          - image: jupyterlab
-            context: images/jupyterlab
+    outputs:
+      value: ${{ steps.tag.outputs.value }}
     steps:
-      - uses: actions/checkout@v4
-
       - name: Resolve tag
         id: tag
         run: |
@@ -48,18 +32,56 @@ jobs:
               echo "value=latest" >> "${GITHUB_OUTPUT}"
           fi
 
-      - name: Set up QEMU (cross-arch builds)
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
+  # Tier 1 — no internal deps
+  build-base:
+    needs: resolve-tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build & push base
+        uses: docker/build-push-action@v5
+        with:
+          context: images/base
+          platforms: ${{ env.PLATFORMS }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/spark-practice-base:${{ needs.resolve-tag.outputs.value }}
+            ${{ env.REGISTRY }}/spark-practice-base:latest
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/spark-practice-base:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/spark-practice-base:buildcache,mode=max
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}
 
+  # Tier 2 — depends on spark-practice-base
+  build-tier2:
+    needs: [resolve-tag, build-base]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: spark-base
+            context: images/spark-base
+          - image: jupyterlab
+            context: images/jupyterlab
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Build & push ${{ matrix.image }}
         uses: docker/build-push-action@v5
         with:
@@ -67,12 +89,49 @@ jobs:
           platforms: ${{ env.PLATFORMS }}
           push: true
           tags: |
-            ${{ env.REGISTRY }}/spark-practice-${{ matrix.image }}:${{ steps.tag.outputs.value }}
+            ${{ env.REGISTRY }}/spark-practice-${{ matrix.image }}:${{ needs.resolve-tag.outputs.value }}
             ${{ env.REGISTRY }}/spark-practice-${{ matrix.image }}:latest
           cache-from: type=registry,ref=${{ env.REGISTRY }}/spark-practice-${{ matrix.image }}:buildcache
           cache-to: type=registry,ref=${{ env.REGISTRY }}/spark-practice-${{ matrix.image }}:buildcache,mode=max
           build-args: |
             BUILD_DATE=${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}
             REGISTRY=${{ env.REGISTRY }}
-            BASE_TAG=${{ steps.tag.outputs.value }}
-            SPARK_BASE_TAG=${{ steps.tag.outputs.value }}
+            BASE_TAG=${{ needs.resolve-tag.outputs.value }}
+
+  # Tier 3 — depends on spark-practice-spark-base
+  build-tier3:
+    needs: [resolve-tag, build-tier2]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: spark-master
+            context: images/spark-master
+          - image: spark-worker
+            context: images/spark-worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build & push ${{ matrix.image }}
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          platforms: ${{ env.PLATFORMS }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/spark-practice-${{ matrix.image }}:${{ needs.resolve-tag.outputs.value }}
+            ${{ env.REGISTRY }}/spark-practice-${{ matrix.image }}:latest
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/spark-practice-${{ matrix.image }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/spark-practice-${{ matrix.image }}:buildcache,mode=max
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}
+            REGISTRY=${{ env.REGISTRY }}
+            SPARK_BASE_TAG=${{ needs.resolve-tag.outputs.value }}
